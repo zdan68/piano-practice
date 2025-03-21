@@ -10,7 +10,7 @@ class Member:
     name: str
     city: str
     status: str
-    practice_records: List[Tuple[int, str]]  # List of (minutes, content) tuples
+    practice_records: List[Tuple[int, str, str]]  # List of (minutes, content, date) tuples
 
 def parse_member_list(content: str) -> Dict[int, Member]:
     members = {}
@@ -34,14 +34,26 @@ def parse_member_list(content: str) -> Dict[int, Member]:
 
 def parse_practice_records(content: str, members: Dict[int, Member]):
     lines = content.strip().split('\n')
+    current_date = ""
     
     for line in lines:
         line = line.strip()
-        if not line or line.startswith('#'):
+        if not line:
             continue
             
-        # Skip date headers and example lines
-        if "年" in line or "例" in line:
+        # Check for date headers
+        if "年" in line:
+            # Extract date from header, e.g., "2025年3月18日 星期二" -> "3月18日"
+            date_match = re.search(r'(\d+)年(\d+)月(\d+)日', line)
+            if date_match:
+                current_date = f"{date_match.group(2)}月{date_match.group(3)}日"
+            continue
+            
+        if line.startswith('#'):
+            continue
+            
+        # Skip example lines
+        if "例" in line:
             continue
             
         # Match pattern: number. 。member_id。 name (city)。minutes。 content
@@ -53,14 +65,14 @@ def parse_practice_records(content: str, members: Dict[int, Member]):
             content = match.group(5).strip()
             
             if member_id in members:
-                members[member_id].practice_records.append((minutes, content))
-                print(f"Successfully parsed record for member {member_id}: {minutes} minutes")
+                members[member_id].practice_records.append((minutes, content, current_date))
+                print(f"Successfully parsed record for member {member_id}: {minutes} minutes on {current_date}")
             else:
                 print(f"Warning: Member ID {member_id} not found in member list")
         else:
             print(f"Warning: Could not parse line: {line}")
 
-def calculate_statistics(members: Dict[int, Member]) -> List[Tuple[int, str, int, float, int, int]]:
+def calculate_statistics(members: Dict[int, Member]) -> List[Tuple[int, str, int, float, int, int, List[Tuple[int, str, str]]]]:
     # Filter members who need to check in (empty status)
     required_members = {k: v for k, v in members.items() if not v.status}
     
@@ -70,13 +82,15 @@ def calculate_statistics(members: Dict[int, Member]) -> List[Tuple[int, str, int
         total_minutes = sum(record[0] for record in member.practice_records)
         total_hours = round(total_minutes / 60, 2)
         days = len(member.practice_records)
-        
-        stats.append((member_id, member.name, total_minutes, total_hours, days, 0))
+        daily_records = member.practice_records
+
+        stats.append((member_id, member.name, total_minutes, total_hours, days, 0, daily_records))
     
     # Sort by total minutes and assign rankings
     stats.sort(key=lambda x: x[2], reverse=True)
     for i, stat in enumerate(stats, 1):
-        stats[i-1] = (*stat[:-1], i)
+        # Preserve the daily_records when updating the ranking
+        stats[i-1] = (*stat[:-1], i, stat[6])
     
     return stats
 
@@ -106,13 +120,51 @@ def process_data(member_list_content: str, practice_records_content: str):
     print("\n1. 统计在群人员名单中，需要打卡人员的本周打卡记录")
     print("入群编号\t姓名\t总时长（分钟）\t总时长（小时）\t总天数\t本周排名（总时长）")
     for stat in stats:
-        print(f"{stat[0]}\t{stat[1]}\t{stat[2]}\t{stat[3]}\t{stat[4]}\t{stat[5]}")
+        print(f"{stat[0]}\t{stat[1]}\t{stat[2]}\t{stat[3]}\t{stat[4]}\t{stat[6]}")
     
     print("\n2. 统计在群人员名单中，本周打卡不达标的成员序号名单")
     print(",".join(map(str, non_compliant)))
     
+    # Prepare data for Excel
+    excel_data = []
+    for stat in stats:
+        # Create a row with basic stats
+        row = {
+            '入群编号': stat[0],
+            '姓名': stat[1]
+        }
+        
+        # Initialize all days with default values
+        for day in range(7):
+            row[f'3月{17+day}日打卡分钟数'] = 0
+            row[f'3月{17+day}日打卡内容'] = ""
+        
+        # Add daily records
+        daily_records = stat[7]  # Get daily records from stats
+        
+        # Fill in actual practice records
+        for record in daily_records:
+            minutes, content, date = record
+            # Extract day number from date (e.g., "3月18日" -> 18)
+            day_match = re.search(r'3月(\d+)日', date)
+            if day_match:
+                day = int(day_match.group(1)) - 17  # Convert to 0-based index
+                if 0 <= day < 7:  # Ensure day is within valid range
+                    row[f'3月{17+day}日打卡分钟数'] = minutes
+                    row[f'3月{17+day}日打卡内容'] = content
+        
+        # Add remaining stats
+        row.update({
+            '总时长（分钟）': stat[2],
+            '总时长（小时）': stat[3],
+            '总天数': stat[4],
+            '本周排名（总时长）': stat[6]
+        })
+        
+        excel_data.append(row)
+    
     # Create DataFrame and save to Excel
-    df = pd.DataFrame(stats, columns=['入群编号', '姓名', '总时长（分钟）', '总时长（小时）', '总天数', '本周排名（总时长）'])
+    df = pd.DataFrame(excel_data)
     df.to_excel('202503月打卡（03.17-03.23) .xlsx', index=False)
     print("\n统计数据已保存到 '202503月打卡（03.17-03.23) .xlsx'")
 
