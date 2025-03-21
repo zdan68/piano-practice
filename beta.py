@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import pandas as pd
 import xlsxwriter
+import sys
 
 @dataclass
 class Member:
@@ -352,7 +353,13 @@ def process_data(member_list_content: str, practice_records_content: str, start_
     generate_ranking_excel(stats, year, start_month, start_day, end_month, end_day)
 
 if __name__ == "__main__":
-    start_date = '20250317'  # Format: YYYYMMDD
+    # Check if start_date is provided as command line argument
+    if len(sys.argv) != 2:
+        print("错误：请提供开始日期参数")
+        print("用法：python3 beta.py YYYYMMDD")
+        sys.exit(1)
+    
+    start_date = sys.argv[1]
     
     # Parse start date for file names
     year = start_date[:4]
@@ -364,17 +371,25 @@ if __name__ == "__main__":
     member_list_file = f"{year}{month}{day}-{year}{month}{end_day}_在群人员名单.md"
     practice_records_file = f"{year}{month}{day}-{year}{month}{end_day}_打卡记录.md"
     
-    # Read member list
-    with open(member_list_file, "r", encoding="utf-8") as f:
-        content = f.read()
-        member_list_content = content.split("## 打卡记录")[0].split("## 在群人员名单")[1].strip()
-    
-    # Read practice records
-    with open(practice_records_file, "r", encoding="utf-8") as f:
-        practice_records_content = f.read()
-    
-    # Process the data
-    process_data(member_list_content, practice_records_content, start_date)
+    try:
+        # Read member list
+        with open(member_list_file, "r", encoding="utf-8") as f:
+            content = f.read()
+            member_list_content = content.split("## 打卡记录")[0].split("## 在群人员名单")[1].strip()
+        
+        # Read practice records
+        with open(practice_records_file, "r", encoding="utf-8") as f:
+            practice_records_content = f.read()
+        
+        # Process the data
+        process_data(member_list_content, practice_records_content, start_date)
+        
+    except FileNotFoundError as e:
+        print(f"错误：找不到必需的文件 - {str(e)}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"错误：程序运行出错 - {str(e)}")
+        sys.exit(1)
 
 
 
