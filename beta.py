@@ -105,7 +105,17 @@ def find_non_compliant_members(members: Dict[int, Member]) -> List[int]:
                 non_compliant.append(member_id)
     return non_compliant
 
-def process_data(member_list_content: str, practice_records_content: str):
+def process_data(member_list_content: str, practice_records_content: str, start_date: str):
+    """
+    Process the data with a given start date.
+    start_date format: 'YYYYMMDD', e.g., '20250317'
+    """
+    # Parse start date
+    year = start_date[:4]
+    month = str(int(start_date[4:6]))  # Remove leading zero
+    day = str(int(start_date[6:8]))    # Remove leading zero
+    start_day = int(day)
+    
     # Parse input data
     members = parse_member_list(member_list_content)
     parse_practice_records(practice_records_content, members)
@@ -135,9 +145,10 @@ def process_data(member_list_content: str, practice_records_content: str):
         }
         
         # Initialize all days with default values
-        for day in range(7):
-            row[f'3月{17+day}日打卡分钟数'] = 0
-            row[f'3月{17+day}日打卡内容'] = ""
+        for day_offset in range(7):
+            current_day = start_day + day_offset
+            row[f'{month}月{current_day}日打卡分钟数'] = 0
+            row[f'{month}月{current_day}日打卡内容'] = ""
         
         # Add daily records
         daily_records = stat[7]  # Get daily records from stats
@@ -146,12 +157,15 @@ def process_data(member_list_content: str, practice_records_content: str):
         for record in daily_records:
             minutes, content, date = record
             # Extract day number from date (e.g., "3月18日" -> 18)
-            day_match = re.search(r'3月(\d+)日', date)
+            day_match = re.search(r'(\d+)月(\d+)日', date)
             if day_match:
-                day = int(day_match.group(1)) - 17  # Convert to 0-based index
-                if 0 <= day < 7:  # Ensure day is within valid range
-                    row[f'3月{17+day}日打卡分钟数'] = minutes
-                    row[f'3月{17+day}日打卡内容'] = content
+                record_month = int(day_match.group(1))
+                record_day = int(day_match.group(2))
+                if record_month == int(month):
+                    day_offset = record_day - start_day
+                    if 0 <= day_offset < 7:  # Ensure day is within valid range
+                        row[f'{month}月{record_day}日打卡分钟数'] = minutes
+                        row[f'{month}月{record_day}日打卡内容'] = content
         
         # Add remaining stats
         row.update({
@@ -167,7 +181,8 @@ def process_data(member_list_content: str, practice_records_content: str):
     df = pd.DataFrame(excel_data)
     
     # Create Excel writer with xlsxwriter engine
-    writer = pd.ExcelWriter('202503月打卡（03.17-03.23) .xlsx', engine='xlsxwriter')
+    output_filename = f'{year}{month.zfill(2)}月打卡（{month}.{day}-{month}.{start_day+6}) .xlsx'
+    writer = pd.ExcelWriter(output_filename, engine='xlsxwriter')
     df.to_excel(writer, index=False, sheet_name='打卡记录', startrow=1)  # Start from row 1
     
     # Get workbook and worksheet objects
@@ -185,37 +200,56 @@ def process_data(member_list_content: str, practice_records_content: str):
     # Set column widths
     worksheet.set_column('A:A', 10)  # 入群编号
     worksheet.set_column('B:B', 15)  # 姓名
-    for day in range(7):
-        col = 2 + day * 2  # 从C列开始，每天占2列
+    for day_offset in range(7):
+        col = 2 + day_offset * 2  # 从C列开始，每天占2列
         worksheet.set_column(col, col, 10)     # 分钟数列
         worksheet.set_column(col + 1, col + 1, 30)  # 内容列
     worksheet.set_column('P:S', 15)  # 统计列
     
+    # Define weekdays in Chinese
+    weekdays = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
+    
     # Merge cells for date headers
-    for day in range(7):
-        col = 2 + day * 2  # 从C列开始，每天占2列
-        worksheet.merge_range(0, col, 0, col + 1, f'3月{17+day}日', header_format)
+    for day_offset in range(7):
+        col = 2 + day_offset * 2  # 从C列开始，每天占2列
+        current_day = start_day + day_offset
+        date_str = f'{year}/{month}/{current_day} {weekdays[day_offset]}'
+        worksheet.merge_range(0, col, 0, col + 1, date_str, header_format)
     
     # Format other headers
-    for col in range(2):  # 入群编号和姓名
-        worksheet.write(0, col, df.columns[col], header_format)
-    for col in range(14, 18):  # 统计列
-        worksheet.write(0, col, df.columns[col], header_format)
+    worksheet.write(0, 0, '入群编号', header_format)
+    worksheet.write(0, 1, '姓名', header_format)
+    
+    # Write statistics headers
+    stats_headers = ['总时长（分钟）', '总时长（小时）', '总天数', '本周排名（总时长）']
+    for i, header in enumerate(stats_headers):
+        worksheet.write(0, 14 + i, header, header_format)
     
     # Save the Excel file
     writer.close()
-    print("\n统计数据已保存到 '202503月打卡（03.17-03.23) .xlsx'")
+    print(f"\n统计数据已保存到 '{output_filename}'")
 
-# Example usage:
 if __name__ == "__main__":
+    start_date = '20250317'  # Format: YYYYMMDD
+    
+    # Parse start date for file names
+    year = start_date[:4]
+    month = str(int(start_date[4:6])).zfill(2)  # Keep leading zero
+    day = str(int(start_date[6:8])).zfill(2)    # Keep leading zero
+    end_day = str(int(day) + 6).zfill(2)
+    
+    # Generate file names
+    member_list_file = f"{year}{month}{day}-{year}{month}{end_day}_在群人员名单.md"
+    practice_records_file = f"{year}{month}{day}-{year}{month}{end_day}_打卡记录.md"
+    
     # Read member list
-    with open("20250317-20250323.md", "r", encoding="utf-8") as f:
+    with open(member_list_file, "r", encoding="utf-8") as f:
         content = f.read()
         member_list_content = content.split("## 打卡记录")[0].split("## 在群人员名单")[1].strip()
     
     # Read practice records
-    with open("打卡记录.md", "r", encoding="utf-8") as f:
+    with open(practice_records_file, "r", encoding="utf-8") as f:
         practice_records_content = f.read()
     
     # Process the data
-    process_data(member_list_content, practice_records_content)
+    process_data(member_list_content, practice_records_content, start_date)
