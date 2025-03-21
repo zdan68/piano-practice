@@ -233,6 +233,27 @@ def generate_ranking_excel(stats: list, start_year: str, start_month: str, start
     workbook.close()
     print(f"\n排名表已保存到 '{output_filename}'")
 
+def generate_warning_message(non_compliant: List[int], weekday: str) -> str:
+    """
+    Generate warning message for non-compliant members
+    """
+    message = "📣统计组预警提醒：\n\n"
+    message += f"今天{weekday}啦！\n"
+    message += "打卡群周最低线：天数≥2天或总时长≥2小时，二者满足其一即可。\n\n"
+    message += "以下在打卡群（请假除外）参与本周打卡统计的伙伴还要差一丢丢，各位小伙伴周末加加油哦[嘿哈]\n\n"
+    message += ",".join(map(str, sorted(non_compliant)))
+    message += "\n\n（统计截至周五打卡数据，如有今天已经达标的，忽略即可~)"
+    return message
+
+def save_warning_message(message: str, start_date: str):
+    """
+    Save warning message to file
+    """
+    output_filename = "oncall_msg.txt"
+    with open(output_filename, "w", encoding="utf-8") as f:
+        f.write(message)
+    print(f"\n预警消息已保存到 '{output_filename}'")
+
 def process_data(member_list_content: str, practice_records_content: str, start_date: str):
     """
     Process the data with a given start date.
@@ -273,6 +294,12 @@ def process_data(member_list_content: str, practice_records_content: str, start_
     
     print("\n2. 统计在群人员名单中，本周打卡不达标的成员序号名单")
     print(",".join(map(str, non_compliant)))
+    
+    # Generate and save warning message
+    weekdays = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
+    current_weekday = weekdays[5]  # 固定为星期六
+    warning_message = generate_warning_message(non_compliant, current_weekday)
+    save_warning_message(warning_message, start_date)
     
     # Prepare data for Excel
     excel_data = []
