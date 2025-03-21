@@ -165,7 +165,45 @@ def process_data(member_list_content: str, practice_records_content: str):
     
     # Create DataFrame and save to Excel
     df = pd.DataFrame(excel_data)
-    df.to_excel('202503月打卡（03.17-03.23) .xlsx', index=False)
+    
+    # Create Excel writer with xlsxwriter engine
+    writer = pd.ExcelWriter('202503月打卡（03.17-03.23) .xlsx', engine='xlsxwriter')
+    df.to_excel(writer, index=False, sheet_name='打卡记录', startrow=1)  # Start from row 1
+    
+    # Get workbook and worksheet objects
+    workbook = writer.book
+    worksheet = writer.sheets['打卡记录']
+    
+    # Define formats
+    header_format = workbook.add_format({
+        'bold': True,
+        'align': 'center',
+        'valign': 'vcenter',
+        'border': 1
+    })
+    
+    # Set column widths
+    worksheet.set_column('A:A', 10)  # 入群编号
+    worksheet.set_column('B:B', 15)  # 姓名
+    for day in range(7):
+        col = 2 + day * 2  # 从C列开始，每天占2列
+        worksheet.set_column(col, col, 10)     # 分钟数列
+        worksheet.set_column(col + 1, col + 1, 30)  # 内容列
+    worksheet.set_column('P:S', 15)  # 统计列
+    
+    # Merge cells for date headers
+    for day in range(7):
+        col = 2 + day * 2  # 从C列开始，每天占2列
+        worksheet.merge_range(0, col, 0, col + 1, f'3月{17+day}日', header_format)
+    
+    # Format other headers
+    for col in range(2):  # 入群编号和姓名
+        worksheet.write(0, col, df.columns[col], header_format)
+    for col in range(14, 18):  # 统计列
+        worksheet.write(0, col, df.columns[col], header_format)
+    
+    # Save the Excel file
+    writer.close()
     print("\n统计数据已保存到 '202503月打卡（03.17-03.23) .xlsx'")
 
 # Example usage:
