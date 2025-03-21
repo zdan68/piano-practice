@@ -3,6 +3,7 @@ from typing import Dict, List, Tuple
 from dataclasses import dataclass
 from datetime import datetime
 import pandas as pd
+import xlsxwriter
 
 @dataclass
 class Member:
@@ -105,84 +106,15 @@ def find_non_compliant_members(members: Dict[int, Member]) -> List[int]:
                 non_compliant.append(member_id)
     return non_compliant
 
-def process_data(member_list_content: str, practice_records_content: str, start_date: str):
+def generate_attendance_excel(excel_data: list, start_year: str, start_month: str, start_day: str, end_month: str, end_day: str):
     """
-    Process the data with a given start date.
-    start_date format: 'YYYYMMDD', e.g., '20250317'
+    Generate Excel file for attendance records
     """
-    # Parse start date
-    year = start_date[:4]
-    month = str(int(start_date[4:6]))  # Remove leading zero
-    day = str(int(start_date[6:8]))    # Remove leading zero
-    start_day = int(day)
-    
-    # Parse input data
-    members = parse_member_list(member_list_content)
-    parse_practice_records(practice_records_content, members)
-    
-    # Calculate statistics
-    stats = calculate_statistics(members)
-    
-    # Find non-compliant members
-    non_compliant = find_non_compliant_members(members)
-    
-    # Print results
-    print("\n1. 统计在群人员名单中，需要打卡人员的本周打卡记录")
-    print("入群编号\t姓名\t总时长（分钟）\t总时长（小时）\t总天数\t本周排名（总时长）")
-    for stat in stats:
-        print(f"{stat[0]}\t{stat[1]}\t{stat[2]}\t{stat[3]}\t{stat[4]}\t{stat[6]}")
-    
-    print("\n2. 统计在群人员名单中，本周打卡不达标的成员序号名单")
-    print(",".join(map(str, non_compliant)))
-    
-    # Prepare data for Excel
-    excel_data = []
-    for stat in stats:
-        # Create a row with basic stats
-        row = {
-            '月份': '',  # Add empty column for month
-            '入群编号': stat[0],
-            '姓名': stat[1]
-        }
-        
-        # Initialize all days with default values
-        for day_offset in range(7):
-            current_day = start_day + day_offset
-            row[f'{month}月{current_day}日打卡分钟数'] = 0
-            row[f'{month}月{current_day}日打卡内容'] = ""
-        
-        # Add daily records
-        daily_records = stat[7]  # Get daily records from stats
-        
-        # Fill in actual practice records
-        for record in daily_records:
-            minutes, content, date = record
-            # Extract day number from date (e.g., "3月18日" -> 18)
-            day_match = re.search(r'(\d+)月(\d+)日', date)
-            if day_match:
-                record_month = int(day_match.group(1))
-                record_day = int(day_match.group(2))
-                if record_month == int(month):
-                    day_offset = record_day - start_day
-                    if 0 <= day_offset < 7:  # Ensure day is within valid range
-                        row[f'{month}月{record_day}日打卡分钟数'] = minutes
-                        row[f'{month}月{record_day}日打卡内容'] = content
-        
-        # Add remaining stats
-        row.update({
-            '总时长（分钟）': stat[2],
-            '总时长（小时）': stat[3],
-            '总天数': stat[4],
-            '本周排名（总时长）': stat[6]
-        })
-        
-        excel_data.append(row)
-    
     # Create DataFrame and save to Excel
     df = pd.DataFrame(excel_data)
     
     # Create Excel writer with xlsxwriter engine
-    output_filename = f'{year}{month.zfill(2)}月打卡（{month}.{day}-{month}.{start_day+6}) .xlsx'
+    output_filename = f'{start_year}{start_month.zfill(2)}月打卡（{start_month}.{start_day}-{end_month}.{end_day}) .xlsx'
     writer = pd.ExcelWriter(output_filename, engine='xlsxwriter')
     df.to_excel(writer, index=False, sheet_name='打卡记录', startrow=2, header=False)  # Start from row 3 and don't write headers
     
@@ -217,7 +149,7 @@ def process_data(member_list_content: str, practice_records_content: str, start_
     worksheet.set_row(1, 20)  # Set height for weekday row
     
     # Write month in first column
-    worksheet.merge_range(0, 0, 1, 0, f'{month}月', header_format)
+    worksheet.merge_range(0, 0, 1, 0, f'{start_month}月', header_format)
     
     # Format other headers - starting from second column
     worksheet.merge_range(0, 1, 1, 1, '入群编号', header_format)
@@ -226,8 +158,10 @@ def process_data(member_list_content: str, practice_records_content: str, start_
     # Merge cells for date headers
     for day_offset in range(7):
         col = 3 + day_offset * 2  # 从D列开始，每天占2列
-        current_day = start_day + day_offset
-        date_str = f'{year}/{month}/{current_day}'
+        current_day = int(start_day) + day_offset
+        current_month = start_month if current_day <= 31 else end_month
+        current_day_str = str(current_day if current_day <= 31 else 1)
+        date_str = f'{start_year}/{current_month}/{current_day_str}'
         weekday_str = weekdays[day_offset]
         # 日期和星期分别写入两行
         worksheet.merge_range(0, col, 0, col + 1, date_str, header_format)
@@ -242,6 +176,153 @@ def process_data(member_list_content: str, practice_records_content: str, start_
     # Save the Excel file
     writer.close()
     print(f"\n统计数据已保存到 '{output_filename}'")
+
+def generate_ranking_excel(stats: list, start_year: str, start_month: str, start_day: str, end_month: str, end_day: str):
+    """
+    Generate Excel file for ranking
+    """
+    output_filename = f'{start_year}{start_month.zfill(2)}月打卡排名（{start_month}.{start_day}-{end_month}.{end_day}) .xlsx'
+    workbook = xlsxwriter.Workbook(output_filename)
+    worksheet = workbook.add_worksheet('排名')
+
+    # Define formats
+    header_format = workbook.add_format({
+        'bold': True,
+        'align': 'center',
+        'valign': 'vcenter',
+        'bg_color': '#D7E4BC',
+        'border': 1
+    })
+    title_format = workbook.add_format({
+        'bold': True,
+        'align': 'center',
+        'valign': 'vcenter',
+        'border': 1,
+        'font_size': 12
+    })
+    cell_format = workbook.add_format({
+        'align': 'center',
+        'valign': 'vcenter',
+        'border': 1
+    })
+
+    # Set column widths
+    worksheet.set_column('A:A', 10)  # 入群编号
+    worksheet.set_column('B:B', 15)  # 姓名
+    worksheet.set_column('C:E', 12)  # 统计数据列
+    worksheet.set_column('F:F', 8)   # 排名
+
+    # Write title - merge all columns
+    title = f'周排名（{start_month}.{start_day}-{end_month}.{end_day}）'
+    worksheet.merge_range(0, 0, 0, 5, title, title_format)
+
+    # Write headers
+    headers = ['入群编号', '姓名', '总时长（分钟）', '总时长（小时）', '总天数', '排名']
+    for col, header in enumerate(headers):
+        worksheet.write(1, col, header, header_format)
+
+    # Write data
+    for row, stat in enumerate(stats, start=2):
+        worksheet.write(row, 0, stat[0], cell_format)  # 入群编号
+        worksheet.write(row, 1, stat[1], cell_format)  # 姓名
+        worksheet.write(row, 2, stat[2], cell_format)  # 总时长（分钟）
+        worksheet.write(row, 3, stat[3], cell_format)  # 总时长（小时）
+        worksheet.write(row, 4, stat[4], cell_format)  # 总天数
+        worksheet.write(row, 5, stat[6], cell_format)  # 排名
+
+    workbook.close()
+    print(f"\n排名表已保存到 '{output_filename}'")
+
+def process_data(member_list_content: str, practice_records_content: str, start_date: str):
+    """
+    Process the data with a given start date.
+    start_date format: 'YYYYMMDD', e.g., '20250317'
+    """
+    # Parse start date
+    year = start_date[:4]
+    start_month = str(int(start_date[4:6]))  # Remove leading zero
+    start_day = str(int(start_date[6:8]))    # Remove leading zero
+    
+    # Calculate end date
+    start_day_int = int(start_day)
+    end_day_int = start_day_int + 6
+    
+    # Handle month rollover
+    days_in_month = 31  # Simplified version, you might want to add proper month length calculation
+    end_month = start_month
+    if end_day_int > days_in_month:
+        end_day_int = end_day_int - days_in_month
+        end_month = str(int(start_month) + 1)
+    end_day = str(end_day_int)
+    
+    # Parse input data
+    members = parse_member_list(member_list_content)
+    parse_practice_records(practice_records_content, members)
+    
+    # Calculate statistics
+    stats = calculate_statistics(members)
+    
+    # Find non-compliant members
+    non_compliant = find_non_compliant_members(members)
+    
+    # Print results
+    print("\n1. 统计在群人员名单中，需要打卡人员的本周打卡记录")
+    print("入群编号\t姓名\t总时长（分钟）\t总时长（小时）\t总天数\t本周排名（总时长）")
+    for stat in stats:
+        print(f"{stat[0]}\t{stat[1]}\t{stat[2]}\t{stat[3]}\t{stat[4]}\t{stat[6]}")
+    
+    print("\n2. 统计在群人员名单中，本周打卡不达标的成员序号名单")
+    print(",".join(map(str, non_compliant)))
+    
+    # Prepare data for Excel
+    excel_data = []
+    for stat in stats:
+        # Create a row with basic stats
+        row = {
+            '月份': '',  # Add empty column for month
+            '入群编号': stat[0],
+            '姓名': stat[1]
+        }
+        
+        # Initialize all days with default values
+        for day_offset in range(7):
+            current_day = start_day_int + day_offset
+            current_month = start_month if current_day <= days_in_month else end_month
+            current_day_str = str(current_day if current_day <= days_in_month else current_day - days_in_month)
+            row[f'{current_month}月{current_day_str}日打卡分钟数'] = 0
+            row[f'{current_month}月{current_day_str}日打卡内容'] = ""
+        
+        # Add daily records
+        daily_records = stat[7]  # Get daily records from stats
+        
+        # Fill in actual practice records
+        for record in daily_records:
+            minutes, content, date = record
+            # Extract day number from date (e.g., "3月18日" -> 18)
+            day_match = re.search(r'(\d+)月(\d+)日', date)
+            if day_match:
+                record_month = int(day_match.group(1))
+                record_day = int(day_match.group(2))
+                if record_month == int(start_month) or record_month == int(end_month):
+                    day_offset = record_day - start_day_int
+                    if 0 <= day_offset < 7:  # Ensure day is within valid range
+                        current_month = str(record_month)
+                        row[f'{current_month}月{record_day}日打卡分钟数'] = minutes
+                        row[f'{current_month}月{record_day}日打卡内容'] = content
+        
+        # Add remaining stats
+        row.update({
+            '总时长（分钟）': stat[2],
+            '总时长（小时）': stat[3],
+            '总天数': stat[4],
+            '本周排名（总时长）': stat[6]
+        })
+        
+        excel_data.append(row)
+    
+    # Generate Excel files
+    generate_attendance_excel(excel_data, year, start_month, start_day, end_month, end_day)
+    generate_ranking_excel(stats, year, start_month, start_day, end_month, end_day)
 
 if __name__ == "__main__":
     start_date = '20250317'  # Format: YYYYMMDD
@@ -267,3 +348,7 @@ if __name__ == "__main__":
     
     # Process the data
     process_data(member_list_content, practice_records_content, start_date)
+
+
+
+
