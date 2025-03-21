@@ -183,7 +183,7 @@ def process_data(member_list_content: str, practice_records_content: str, start_
     # Create Excel writer with xlsxwriter engine
     output_filename = f'{year}{month.zfill(2)}月打卡（{month}.{day}-{month}.{start_day+6}) .xlsx'
     writer = pd.ExcelWriter(output_filename, engine='xlsxwriter')
-    df.to_excel(writer, index=False, sheet_name='打卡记录', startrow=1)  # Start from row 1
+    df.to_excel(writer, index=False, sheet_name='打卡记录', startrow=2, header=False)  # Start from row 3 and don't write headers
     
     # Get workbook and worksheet objects
     workbook = writer.book
@@ -194,7 +194,8 @@ def process_data(member_list_content: str, practice_records_content: str, start_
         'bold': True,
         'align': 'center',
         'valign': 'vcenter',
-        'border': 1
+        'border': 1,
+        'text_wrap': True  # Enable text wrapping for multi-line text
     })
     
     # Set column widths
@@ -209,21 +210,29 @@ def process_data(member_list_content: str, practice_records_content: str, start_
     # Define weekdays in Chinese
     weekdays = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
     
+    # Set row height for header
+    worksheet.set_row(0, 20)  # Set height for date row
+    worksheet.set_row(1, 20)  # Set height for weekday row
+    
     # Merge cells for date headers
     for day_offset in range(7):
         col = 2 + day_offset * 2  # 从C列开始，每天占2列
         current_day = start_day + day_offset
-        date_str = f'{year}/{month}/{current_day} {weekdays[day_offset]}'
+        date_str = f'{year}/{month}/{current_day}'
+        weekday_str = weekdays[day_offset]
+        # 日期和星期分别写入两行
         worksheet.merge_range(0, col, 0, col + 1, date_str, header_format)
+        worksheet.merge_range(1, col, 1, col + 1, weekday_str, header_format)
     
     # Format other headers
-    worksheet.write(0, 0, '入群编号', header_format)
-    worksheet.write(0, 1, '姓名', header_format)
+    worksheet.merge_range(0, 0, 1, 0, '入群编号', header_format)
+    worksheet.merge_range(0, 1, 1, 1, '姓名', header_format)
     
-    # Write statistics headers
+    # Write statistics headers - starting from column 16 (P)
     stats_headers = ['总时长（分钟）', '总时长（小时）', '总天数', '本周排名（总时长）']
     for i, header in enumerate(stats_headers):
-        worksheet.write(0, 14 + i, header, header_format)
+        col = 16 + i  # Start from column P (16)
+        worksheet.merge_range(0, col, 1, col, header, header_format)
     
     # Save the Excel file
     writer.close()
