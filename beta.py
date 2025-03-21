@@ -140,6 +140,7 @@ def process_data(member_list_content: str, practice_records_content: str, start_
     for stat in stats:
         # Create a row with basic stats
         row = {
+            '月份': '',  # Add empty column for month
             '入群编号': stat[0],
             '姓名': stat[1]
         }
@@ -199,13 +200,14 @@ def process_data(member_list_content: str, practice_records_content: str, start_
     })
     
     # Set column widths
-    worksheet.set_column('A:A', 10)  # 入群编号
-    worksheet.set_column('B:B', 15)  # 姓名
+    worksheet.set_column('A:A', 8)   # 月份列
+    worksheet.set_column('B:B', 10)  # 入群编号
+    worksheet.set_column('C:C', 15)  # 姓名
     for day_offset in range(7):
-        col = 2 + day_offset * 2  # 从C列开始，每天占2列
+        col = 3 + day_offset * 2  # 从D列开始，每天占2列
         worksheet.set_column(col, col, 10)     # 分钟数列
         worksheet.set_column(col + 1, col + 1, 30)  # 内容列
-    worksheet.set_column('P:S', 15)  # 统计列
+    worksheet.set_column('Q:T', 15)  # 统计列
     
     # Define weekdays in Chinese
     weekdays = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
@@ -214,9 +216,16 @@ def process_data(member_list_content: str, practice_records_content: str, start_
     worksheet.set_row(0, 20)  # Set height for date row
     worksheet.set_row(1, 20)  # Set height for weekday row
     
+    # Write month in first column
+    worksheet.merge_range(0, 0, 1, 0, f'{month}月', header_format)
+    
+    # Format other headers - starting from second column
+    worksheet.merge_range(0, 1, 1, 1, '入群编号', header_format)
+    worksheet.merge_range(0, 2, 1, 2, '姓名', header_format)
+    
     # Merge cells for date headers
     for day_offset in range(7):
-        col = 2 + day_offset * 2  # 从C列开始，每天占2列
+        col = 3 + day_offset * 2  # 从D列开始，每天占2列
         current_day = start_day + day_offset
         date_str = f'{year}/{month}/{current_day}'
         weekday_str = weekdays[day_offset]
@@ -224,14 +233,10 @@ def process_data(member_list_content: str, practice_records_content: str, start_
         worksheet.merge_range(0, col, 0, col + 1, date_str, header_format)
         worksheet.merge_range(1, col, 1, col + 1, weekday_str, header_format)
     
-    # Format other headers
-    worksheet.merge_range(0, 0, 1, 0, '入群编号', header_format)
-    worksheet.merge_range(0, 1, 1, 1, '姓名', header_format)
-    
-    # Write statistics headers - starting from column 16 (P)
+    # Write statistics headers - starting from column 17 (Q)
     stats_headers = ['总时长（分钟）', '总时长（小时）', '总天数', '本周排名（总时长）']
     for i, header in enumerate(stats_headers):
-        col = 16 + i  # Start from column P (16)
+        col = 17 + i  # Start from column Q (17)
         worksheet.merge_range(0, col, 1, col, header, header_format)
     
     # Save the Excel file
