@@ -24,9 +24,12 @@ day=${start_date:6:2}
 # Calculate end date (start_date + 6 days)
 end_date=$(date -v+6d -j -f "%Y%m%d" "$start_date" "+%Y%m%d")
 
-# Check if required files exist
-member_list_file="${start_date}-${end_date}_在群人员名单.md"
-practice_records_file="${start_date}-${end_date}_打卡记录.md"
+# Create files directory if it doesn't exist
+mkdir -p files
+
+# Check if required files exist (without end date in file names)
+member_list_file="files/${start_date}_在群人员名单.md"
+practice_records_file="files/${start_date}_打卡记录.md"
 
 if [ ! -f "$member_list_file" ]; then
     echo "错误：找不到文件 $member_list_file"

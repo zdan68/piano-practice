@@ -68,11 +68,11 @@ def parse_practice_records(content: str, members: Dict[int, Member]):
             
             if member_id in members:
                 members[member_id].practice_records.append((minutes, content, current_date))
-                print(f"Successfully parsed record for member {member_id}: {minutes} minutes on {current_date}")
+                # print(f"Successfully parsed record for member {member_id}: {minutes} minutes on {current_date}")
             else:
                 print(f"Warning: Member ID {member_id} not found in member list")
         else:
-            print(f"Warning: Could not parse line: {line}")
+            print(f"Warning: Could not parse line: {line}。本条记录不参与统计")
 
 def calculate_statistics(members: Dict[int, Member]) -> List[Tuple[int, str, int, float, int, int, List[Tuple[int, str, str]]]]:
     # Filter members who need to check in (empty status)
@@ -115,7 +115,7 @@ def generate_attendance_excel(excel_data: list, start_year: str, start_month: st
     df = pd.DataFrame(excel_data)
     
     # Create Excel writer with xlsxwriter engine
-    output_filename = f'{start_year}{start_month.zfill(2)}月打卡（{start_month}.{start_day}-{end_month}.{end_day}) .xlsx'
+    output_filename = f'files/{start_year}{start_month.zfill(2)}月打卡（{start_month}.{start_day}-{end_month}.{end_day}) .xlsx'
     writer = pd.ExcelWriter(output_filename, engine='xlsxwriter')
     df.to_excel(writer, index=False, sheet_name='打卡记录', startrow=2, header=False)  # Start from row 3 and don't write headers
     
@@ -182,7 +182,7 @@ def generate_ranking_excel(stats: list, start_year: str, start_month: str, start
     """
     Generate Excel file for ranking
     """
-    output_filename = f'{start_year}{start_month.zfill(2)}月打卡排名（{start_month}.{start_day}-{end_month}.{end_day}) .xlsx'
+    output_filename = f'files/{start_year}{start_month.zfill(2)}月打卡排名（{start_month}.{start_day}-{end_month}.{end_day}) .xlsx'
     workbook = xlsxwriter.Workbook(output_filename)
     worksheet = workbook.add_worksheet('排名')
 
@@ -250,7 +250,7 @@ def save_warning_message(message: str, start_date: str):
     """
     Save warning message to file
     """
-    output_filename = "oncall_msg.txt"
+    output_filename = "files/oncall_msg.txt"
     with open(output_filename, "w", encoding="utf-8") as f:
         f.write(message)
     print(f"\n预警消息已保存到 '{output_filename}'")
@@ -289,9 +289,9 @@ def process_data(member_list_content: str, practice_records_content: str, start_
     
     # Print results
     print("\n1. 统计在群人员名单中，需要打卡人员的本周打卡记录")
-    print("入群编号\t姓名\t总时长（分钟）\t总时长（小时）\t总天数\t本周排名（总时长）")
-    for stat in stats:
-        print(f"{stat[0]}\t{stat[1]}\t{stat[2]}\t{stat[3]}\t{stat[4]}\t{stat[6]}")
+    # print("入群编号\t姓名\t总时长（分钟）\t总时长（小时）\t总天数\t本周排名（总时长）")
+    # for stat in stats:
+    #     print(f"{stat[0]}\t{stat[1]}\t{stat[2]}\t{stat[3]}\t{stat[4]}\t{stat[6]}")
     
     print("\n2. 统计在群人员名单中，本周打卡不达标的成员序号名单")
     print(",".join(map(str, non_compliant)))
@@ -367,9 +367,9 @@ if __name__ == "__main__":
     day = str(int(start_date[6:8])).zfill(2)    # Keep leading zero
     end_day = str(int(day) + 6).zfill(2)
     
-    # Generate file names
-    member_list_file = f"{year}{month}{day}-{year}{month}{end_day}_在群人员名单.md"
-    practice_records_file = f"{year}{month}{day}-{year}{month}{end_day}_打卡记录.md"
+    # Generate file names (without end date in input file names)
+    member_list_file = f"files/{year}{month}{day}_在群人员名单.md"
+    practice_records_file = f"files/{year}{month}{day}_打卡记录.md"
     
     try:
         # Read member list
