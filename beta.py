@@ -111,17 +111,10 @@ def generate_attendance_excel(excel_data: list, start_year: str, start_month: st
     """
     Generate Excel file for attendance records
     """
-    # Create DataFrame and save to Excel
-    df = pd.DataFrame(excel_data)
-    
     # Create Excel writer with xlsxwriter engine
     output_filename = f'files/{start_year}{start_month.zfill(2)}月打卡（{start_month}.{start_day}-{end_month}.{end_day}) .xlsx'
-    writer = pd.ExcelWriter(output_filename, engine='xlsxwriter')
-    df.to_excel(writer, index=False, sheet_name='打卡记录', startrow=2, header=False)  # Start from row 3 and don't write headers
-    
-    # Get workbook and worksheet objects
-    workbook = writer.book
-    worksheet = writer.sheets['打卡记录']
+    workbook = xlsxwriter.Workbook(output_filename)
+    worksheet = workbook.add_worksheet('打卡记录')
     
     # Define formats
     header_format = workbook.add_format({
@@ -130,6 +123,19 @@ def generate_attendance_excel(excel_data: list, start_year: str, start_month: st
         'valign': 'vcenter',
         'border': 1,
         'text_wrap': True  # Enable text wrapping for multi-line text
+    })
+    
+    cell_format = workbook.add_format({
+        'align': 'center',
+        'valign': 'vcenter',
+        'border': 1
+    })
+    
+    warning_format = workbook.add_format({
+        'bg_color': '#FFB6C1',  # Light pink
+        'align': 'center',
+        'valign': 'vcenter',
+        'border': 1
     })
     
     # Set column widths
@@ -174,8 +180,38 @@ def generate_attendance_excel(excel_data: list, start_year: str, start_month: st
         col = 17 + i  # Start from column Q (17)
         worksheet.merge_range(0, col, 1, col, header, header_format)
     
+    # Write data rows
+    for row_idx, row_data in enumerate(excel_data, start=2):
+        # Write basic info with cell_format
+        worksheet.write(row_idx, 0, row_data['月份'], cell_format)  # 月份
+        worksheet.write(row_idx, 1, row_data['入群编号'], cell_format)  # 入群编号
+        worksheet.write(row_idx, 2, row_data['姓名'], cell_format)  # 姓名
+        
+        # Write daily records with cell_format
+        for day_offset in range(7):
+            col = 3 + day_offset * 2  # 从D列开始，每天占2列
+            current_day = int(start_day) + day_offset
+            current_month = start_month if current_day <= 31 else end_month
+            current_day_str = str(current_day if current_day <= 31 else 1)
+            
+            minutes_key = f'{current_month}月{current_day_str}日打卡分钟数'
+            content_key = f'{current_month}月{current_day_str}日打卡内容'
+            
+            worksheet.write(row_idx, col, row_data[minutes_key], cell_format)
+            worksheet.write(row_idx, col + 1, row_data[content_key], cell_format)
+        
+        # Write statistics with appropriate format
+        total_minutes = row_data['总时长（分钟）']
+        total_days = row_data['总天数']
+        format_to_use = warning_format if total_minutes < 120 and total_days < 2 else cell_format
+        
+        worksheet.write(row_idx, 17, total_minutes, cell_format)  # 总时长（分钟）
+        worksheet.write(row_idx, 18, row_data['总时长（小时）'], format_to_use)  # 总时长（小时）
+        worksheet.write(row_idx, 19, total_days, format_to_use)  # 总天数
+        worksheet.write(row_idx, 20, row_data['本周排名（总时长）'], cell_format)  # 排名
+    
     # Save the Excel file
-    writer.close()
+    workbook.close()
     print(f"\n统计数据已保存到 '{output_filename}'")
 
 def generate_ranking_excel(stats: list, start_year: str, start_month: str, start_day: str, end_month: str, end_day: str):
@@ -206,6 +242,12 @@ def generate_ranking_excel(stats: list, start_year: str, start_month: str, start
         'valign': 'vcenter',
         'border': 1
     })
+    warning_format = workbook.add_format({
+        'bg_color': '#FFB6C1',  # Light pink
+        'align': 'center',
+        'valign': 'vcenter',
+        'border': 1
+    })
 
     # Set column widths
     worksheet.set_column('A:A', 10)  # 入群编号
@@ -224,11 +266,15 @@ def generate_ranking_excel(stats: list, start_year: str, start_month: str, start
 
     # Write data
     for row, stat in enumerate(stats, start=2):
+        total_minutes = stat[2]
+        total_days = stat[4]
+        format_to_use = warning_format if total_minutes < 120 and total_days < 2 else cell_format
+        
         worksheet.write(row, 0, stat[0], cell_format)  # 入群编号
         worksheet.write(row, 1, stat[1], cell_format)  # 姓名
-        worksheet.write(row, 2, stat[2], cell_format)  # 总时长（分钟）
-        worksheet.write(row, 3, stat[3], cell_format)  # 总时长（小时）
-        worksheet.write(row, 4, stat[4], cell_format)  # 总天数
+        worksheet.write(row, 2, total_minutes, cell_format)  # 总时长（分钟）
+        worksheet.write(row, 3, stat[3], format_to_use)  # 总时长（小时）
+        worksheet.write(row, 4, total_days, format_to_use)  # 总天数
         worksheet.write(row, 5, stat[6], cell_format)  # 排名
 
     workbook.close()
