@@ -1,8 +1,6 @@
 import re
 from typing import Dict, List, Tuple
 from dataclasses import dataclass
-from datetime import datetime
-import pandas as pd
 import xlsxwriter
 import sys
 
@@ -44,7 +42,7 @@ def parse_practice_records(content: str, members: Dict[int, Member]):
             continue
             
         # Check for date headers
-        if "年" in line:
+        if "年" in line and "月" in line and "日" in line:
             # Extract date from header, e.g., "2025年3月18日 星期二" -> "3月18日"
             date_match = re.search(r'(\d+)年(\d+)月(\d+)日', line)
             if date_match:
@@ -90,9 +88,17 @@ def calculate_statistics(members: Dict[int, Member]) -> List[Tuple[int, str, int
     
     # Sort by total minutes and assign rankings
     stats.sort(key=lambda x: x[2], reverse=True)
-    for i, stat in enumerate(stats, 1):
+    
+    # Assign rankings with same rank for equal values
+    current_rank = 1
+    previous_minutes = None
+    
+    for i, stat in enumerate(stats):
+        if previous_minutes is None or stat[2] < previous_minutes:
+            current_rank = i + 1
+        previous_minutes = stat[2]
         # Preserve the daily_records when updating the ranking
-        stats[i-1] = (*stat[:-1], i, stat[6])
+        stats[i] = (*stat[:-1], current_rank, stat[6])
     
     return stats
 
