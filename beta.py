@@ -16,20 +16,25 @@ def parse_member_list(content: str) -> Dict[int, Member]:
     members = {}
     lines = content.strip().split('\n')
     
-    # Skip header
-    for line in lines[1:]:
+    # Skip header lines (both the title and the column headers)
+    for line in lines[2:]:  # Skip both "## 在群人员名单" and the column headers
         if not line.strip():
             continue
-        parts = line.split('\t')
-        if len(parts) >= 4:
-            member_id = int(parts[0])
-            members[member_id] = Member(
-                id=member_id,
-                name=parts[1],
-                city=parts[2],
-                status=parts[3] if len(parts) > 3 else "",
-                practice_records=[]
-            )
+        # 使用制表符分割，并确保去除每个字段的空白字符
+        parts = [part.strip() for part in line.split('\t')]
+        if len(parts) >= 3:  # 只需要确保至少有ID、昵称和城市三个字段
+            try:
+                member_id = int(parts[0])
+                members[member_id] = Member(
+                    id=member_id,
+                    name=parts[1],
+                    city=parts[2],
+                    status=parts[3] if len(parts) > 3 else "",
+                    practice_records=[]
+                )
+            except ValueError:
+                print(f"Warning: Could not parse member ID from line: {line}")
+                continue
     return members
 
 def parse_practice_records(content: str, members: Dict[int, Member]):
@@ -42,11 +47,11 @@ def parse_practice_records(content: str, members: Dict[int, Member]):
             continue
             
         # Check for date headers
-        if "年" in line and "月" in line and "日" in line:
+        # 示例： 2025年3月18日 星期二
+        date_header_pattern = re.match(r'^(\d{4})年(\d{1,2})月(\d{1,2})日\s*(?:星期[一二三四五六日])?', line)
+        if date_header_pattern:
             # Extract date from header, e.g., "2025年3月18日 星期二" -> "3月18日"
-            date_match = re.search(r'(\d+)年(\d+)月(\d+)日', line)
-            if date_match:
-                current_date = f"{date_match.group(2)}月{date_match.group(3)}日"
+            current_date = f"{date_header_pattern.group(2)}月{date_header_pattern.group(3)}日"
             continue
             
         if line.startswith('#'):
@@ -427,7 +432,8 @@ if __name__ == "__main__":
         # Read member list
         with open(member_list_file, "r", encoding="utf-8") as f:
             content = f.read()
-            member_list_content = content.split("## 打卡记录")[0].split("## 在群人员名单")[1].strip()
+            # 直接使用整个文件内容，因为成员名单文件只包含成员名单
+            member_list_content = content
         
         # Read practice records
         with open(practice_records_file, "r", encoding="utf-8") as f:
